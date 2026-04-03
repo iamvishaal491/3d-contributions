@@ -47,12 +47,19 @@ export default async function handler(req, res) {
       headers: {
         'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json',
+        'User-Agent': '3d-contributions-visualizer'
       },
       body: JSON.stringify({
         query,
         variables: { login: username },
       }),
     });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`GitHub API returned ${response.status}: ${errorText}`);
+      return res.status(response.status).json({ error: `GitHub API error: ${response.status}` });
+    }
 
     const data = await response.json();
 
@@ -62,7 +69,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json(data.data.user.contributionsCollection.contributionCalendar);
   } catch (error) {
-    console.error('Error fetching GitHub data:', error);
-    return res.status(500).json({ error: 'Failed to fetch GitHub data' });
+    console.error('Fetch operation error:', error.message);
+    return res.status(500).json({ error: `Server error: ${error.message}` });
   }
 }
