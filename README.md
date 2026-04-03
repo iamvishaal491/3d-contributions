@@ -59,20 +59,12 @@ Because this application relies on WebGL (Three.js), it requires an interactive 
 
 ---
 
-## 🧊 3D Contribution Calendar
-
-This static isometric SVG is auto-generated daily by a GitHub Actions workflow and embedded directly into any GitHub README.
-
 <table>
   <tr>
     <td width="60%" valign="top">
       <div align="center">
         <a href="https://3d-contributions-app.vercel.app/?username=iamvishaal491">
           <img src="https://raw.githubusercontent.com/iamvishaal491/3d-contributions-app/main/output/isometric-calendar.svg" alt="3D Isometric Contribution Calendar" width="100%" />
-        </a>
-        <br><br>
-        <a href="https://3d-contributions-app.vercel.app/?username=iamvishaal491">
-          <img src="https://img.shields.io/badge/View_Interactive_3D-Experience-22c55e?style=for-the-badge&logo=threedotjs&logoColor=white" alt="View Interactive 3D" />
         </a>
       </div>
     </td>
