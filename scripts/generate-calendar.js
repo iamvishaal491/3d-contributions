@@ -22,6 +22,7 @@ const OUTPUT_DIR = path.join(__dirname, '..', 'output');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'isometric-calendar.svg');
 
 async function fetchContributions() {
+  console.log(`[+] Fetching contributions for user: ${USERNAME}`);
   const query = `
     query {
       user(login: "${USERNAME}") {
@@ -50,12 +51,18 @@ async function fetchContributions() {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub API HTTP error! status: ${response.status}`);
+    const errorBody = await response.text().catch(() => 'No body');
+    throw new Error(`GitHub API HTTP error! status: ${response.status} (${response.statusText}). Body: ${errorBody}`);
   }
 
   const data = await response.json();
+  
   if (data.errors) {
     throw new Error(`GitHub API GraphQL Error: ${data.errors.map(err => err.message).join(', ')}`);
+  }
+
+  if (!data.data || !data.data.user) {
+    throw new Error(`User "${USERNAME}" not found or data unreachable. Check your GITHUB_TOKEN permissions.`);
   }
 
   return data.data.user.contributionsCollection.contributionCalendar;
