@@ -61,9 +61,9 @@ body {
   z-index: 10;
   pointer-events: none;
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 2.5rem;
+  flex-direction: row;
+  justify-content: space-between;
+  padding: 2rem;
 }
 
 /* Shared Glass Panel Formats */
@@ -253,6 +253,77 @@ button:disabled {
 
 @keyframes spin {
   to { transform: rotate(360deg); }
+}
+
+/* Stats Dashboard */
+.stats-card {
+  padding: 1.5rem;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  align-self: flex-start;
+  animation: slideRight 0.8s cubic-bezier(0.16, 1, 0.3, 1) 0.2s both;
+}
+
+.stats-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.stats-label {
+  color: #58a6ff;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 0.25rem;
+}
+
+.stats-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.stats-key {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.stats-val {
+  color: var(--text-main);
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+/* Animations */
+@keyframes slideRight {
+  from {
+    opacity: 0;
+    transform: translateX(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@media (max-width: 900px) {
+  #ui-layer {
+    flex-direction: column;
+    align-items: center;
+    overflow-y: auto;
+    padding: 1rem;
+  }
+  
+  .stats-card {
+    align-self: center;
+    margin-top: 1rem;
+    width: 100%;
+    max-width: 600px;
+  }
 }
 
 @media (max-width: 600px) {

@@ -34,6 +34,12 @@ const tooltip = document.getElementById('tooltip');
 const tooltipDate = document.getElementById('tooltip-date');
 const tooltipCount = document.getElementById('tooltip-count');
 
+// Stats DOM Elements
+const statTotal = document.getElementById('stat-total');
+const statStreak = document.getElementById('stat-streak');
+const statMax = document.getElementById('stat-max');
+const statAvg = document.getElementById('stat-avg');
+
 // Architecture Settings
 const CUBE_SIZE = 1;
 const GAP = 0.3;
@@ -298,6 +304,7 @@ async function handleSearch(e) {
     showStatus(`Visualizing @${username}`);
     
     gsap.to(overlay, { opacity: 0, duration: 0.8, ease: "power2.out" });
+    updateStatsUI(currentData);
 
   } catch (err) {
     console.error('Fetch failed:', err);
@@ -369,6 +376,11 @@ function buildGrid(data) {
         originalEmissive: material.emissive.clone(),
         targetHeight: rawHeight
       };
+
+      // Add Sharp Borders (EdgesGeometry)
+      const edges = new THREE.EdgesGeometry(geometry);
+      const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 }));
+      cube.add(line);
 
       scene.add(cube);
       cubes.push(cube);
@@ -541,4 +553,37 @@ function showStatus(text, type = 'info') {
       statusMsg.className = 'glass-panel status visible';
       statusMsg.style.borderColor = (type === 'error') ? 'rgba(239, 68, 68, 0.4)' : 'rgba(255, 255, 255, 0.08)';
   }
+}
+
+function updateStatsUI(data) {
+  if (!data || !data.weeks) return;
+
+  let totalCount = 0;
+  let maxCount = 0;
+  let currentStreak = 0;
+  let bestStreak = 0;
+  let dayCount = 0;
+
+  data.weeks.forEach(week => {
+    week.contributionDays?.forEach(day => {
+      const count = day.contributionCount;
+      totalCount += count;
+      dayCount++;
+      if (count > maxCount) maxCount = count;
+
+      if (count > 0) {
+        currentStreak++;
+        if (currentStreak > bestStreak) bestStreak = currentStreak;
+      } else {
+        currentStreak = 0;
+      }
+    });
+  });
+
+  const avg = (totalCount / dayCount).toFixed(2);
+
+  if (statTotal) statTotal.textContent = totalCount.toLocaleString();
+  if (statStreak) statStreak.textContent = `${bestStreak} days`;
+  if (statMax) statMax.textContent = maxCount;
+  if (statAvg) statAvg.textContent = `${avg}`;
 }
