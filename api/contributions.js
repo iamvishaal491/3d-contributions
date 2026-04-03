@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     return;
   }
 
-  const token = process.env.GITHUB_TOKEN;
+  const token = process.env.GITHUB_TOKEN || process.env.VERCEL_TOKEN;
 
   if (!token) {
     return res.status(500).json({ error: 'GitHub token is missing on the server' });

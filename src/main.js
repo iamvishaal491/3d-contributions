@@ -160,7 +160,7 @@ function init() {
 
 function parseURLAndLoad() {
   const urlParams = new URLSearchParams(window.location.search);
-  const user = urlParams.get('username');
+  const user = urlParams.get('username') || 'iamvishaal491';
   const theme = urlParams.get('theme');
 
   if (theme && THEMES[theme]) {
@@ -170,9 +170,9 @@ function parseURLAndLoad() {
   
   setTheme(currentTheme, true); // initial load without fadeout
 
-  if (user && input) {
+  if (input) {
     input.value = user;
-    if (form) form.dispatchEvent(new Event('submit'));
+    handleSearch();
   }
 }
 
