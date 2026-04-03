@@ -1,18 +1,25 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { fetchGitHubContributions } from './github.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 
 /**
  * 3D GitHub Contribution Visualizer - Main Engine
- * Senior Engineer Debugging: Final Checklist Verification
+ * Multi-Theme Integration (Classic, Isometric, Skyline)
  */
 
-// ✔ 1. Global declarations (Fix for Scope/Clock Issue)
-let scene, camera, renderer, controls, clock;
+let scene, renderer, controls, clock;
+let perspectiveCamera, orthographicCamera, currentCamera;
 let raycaster, mouse;
 let cubes = [];
 let targetHeights = [];
 let hoveredCube = null;
+
+// Post Processing
+let composer, renderPass, bloomPass;
+let gridHelper = null;
 
 // UI Elements
 const form = document.getElementById('search-form');
@@ -22,66 +29,111 @@ const statusMsg = document.getElementById('status-message');
 const tooltip = document.getElementById('tooltip');
 const tooltipDate = document.getElementById('tooltip-date');
 const tooltipCount = document.getElementById('tooltip-count');
+const themeButtons = document.querySelectorAll('.theme-btn');
 
-// Constants & Theme
+// Constants
 const CUBE_SIZE = 1;
 const GAP = 0.3;
 const BASE_HEIGHT = 0.2;
 const MAX_HEIGHT_SCALE = 3;
 
-const COLOR_BG = 0x0b0f19;
-const COLOR_LOW = new THREE.Color('#102e1c');
-const COLOR_HIGH = new THREE.Color('#4ade80');
-const COLOR_ACTIVE = new THREE.Color('#ffffff');
+// State Variables
+let currentData = null;
+let currentTheme = 'classic'; // 'classic', 'isometric', 'skyline'
 
-// ✔ 2. Execution Order: init() first, then animate()
+// Themes Map
+const THEMES = {
+  classic: {
+    bg: 0x0b0f19,
+    fog: 20,
+    fogFar: 100,
+    floor: false,
+    useBloom: false,
+    colorLow: new THREE.Color('#102e1c'),
+    colorHigh: new THREE.Color('#4ade80'),
+    colorEmpty: 0x1e293b,
+  },
+  isometric: {
+    bg: 0xf3f4f6, // Light minimal background
+    fog: 100,
+    fogFar: 300,
+    floor: true,
+    gridColor: 0xcccccc,
+    useBloom: false,
+    colorLow: new THREE.Color('#9be9a8'),
+    colorHigh: new THREE.Color('#216e39'),
+    colorEmpty: 0xebedf0,
+  },
+  skyline: {
+    bg: 0x0a0310, // Deep synthwave purple
+    fog: 20,
+    fogFar: 90,
+    floor: true,
+    gridColor: 0xff00ff, // Neon pink wireframe
+    useBloom: true,
+    colorLow: new THREE.Color('#002244'),
+    colorHigh: new THREE.Color('#00ffff'), // Neon Cyan
+    colorEmpty: 0x110022,
+  }
+};
+
 init();
 animate();
 
 function init() {
-  // ✔ 1. Clock initialized inside init
   clock = new THREE.Clock();
 
-  // ✔ 11. DOM Issue check: Ensure container exists
   const container = document.getElementById('canvas-container');
-  if (!container) {
-    console.error("Canvas container not found!");
-    return;
-  }
+  if (!container) return;
 
-  // ✔ 3. Scene Initialization
+  // Scene
   scene = new THREE.Scene();
-  scene.background = new THREE.Color(COLOR_BG);
-  scene.fog = new THREE.Fog(COLOR_BG, 20, 100);
 
-  // ✔ 5. Camera Issue check: Initialize and position correctly
-  camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-  camera.position.set(30, 40, 60);
+  // Cameras (Dual Setup)
+  const aspect = window.innerWidth / window.innerHeight;
+  const frustumSize = 40;
+  
+  perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
+  perspectiveCamera.position.set(30, 40, 60);
 
-  // ✔ 4, 10. Renderer Setup & Size
+  orthographicCamera = new THREE.OrthographicCamera(
+    (frustumSize * aspect) / -2, (frustumSize * aspect) / 2, 
+    frustumSize / 2, frustumSize / -2, 
+    -100, 1000
+  );
+  orthographicCamera.position.set(50, 50, 50); // Isometric lock position
+
+  currentCamera = perspectiveCamera;
+
+  // Renderer
   renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  
-  // ✔ 4. Attach renderer to DOM
   container.appendChild(renderer.domElement);
 
-  // Controls Setup
-  controls = new OrbitControls(camera, renderer.domElement);
+  // Controls
+  controls = new OrbitControls(currentCamera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.minDistance = 5;
   controls.maxDistance = 150;
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
-  
-  // ✔ 5. Point camera at scene (OrbitControls target manages lookAt)
-  controls.target.set(0, 0, 0);
-  controls.update();
 
-  // ✔ 9. Lighting Issue check: Ensure ambient and directional lights exist
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+  // Post-Processing (Bloom for Skyline)
+  composer = new EffectComposer(renderer);
+  renderPass = new RenderPass(scene, currentCamera);
+  composer.addPass(renderPass);
+
+  bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
+  bloomPass.strength = 1.2;
+  bloomPass.radius = 0.5;
+  bloomPass.threshold = 0.1;
+  composer.addPass(bloomPass);
+
+  // Lighting
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
   const dirLight = new THREE.DirectionalLight(0xffffff, 1);
@@ -95,43 +147,86 @@ function init() {
   dirLight.shadow.mapSize.height = 2048;
   scene.add(dirLight);
 
-  // Interaction Helpers
   raycaster = new THREE.Raycaster();
   mouse = new THREE.Vector2();
 
-  // Fallback / Debug Cube (To verify scene renders without data)
   const debugGeometry = new THREE.BoxGeometry(1, 1, 1);
   const debugMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0x330000 });
   const debugCube = new THREE.Mesh(debugGeometry, debugMaterial);
   debugCube.name = 'debug-cube';
-  scene.add(debugCube); // ✔ 7. Cube added to scene
+  scene.add(debugCube);
 
-  // Event Listeners
+  // Apply Default Theme Details
+  applyThemeModifiers();
+
+  // Events
   window.addEventListener('resize', onWindowResize);
   window.addEventListener('mousemove', onMouseMove);
   if (form) form.addEventListener('submit', handleSearch);
   
-  console.log('[3D Engine] Initialization complete. Scene ready.');
+  themeButtons.forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      themeButtons.forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      currentTheme = e.target.getAttribute('data-theme');
+      applyThemeModifiers();
+    });
+  });
 }
 
-// ✔ 8. Loop Issue check: animate() handles loop securely
+function applyThemeModifiers() {
+  const t = THEMES[currentTheme];
+  
+  // Scene Global
+  scene.background = new THREE.Color(t.bg);
+  scene.fog = new THREE.Fog(t.bg, t.fog, t.fogFar);
+
+  // Grid Helper Management
+  if (gridHelper) {
+    scene.remove(gridHelper);
+    gridHelper.dispose();
+    gridHelper = null;
+  }
+  
+  if (t.floor) {
+    gridHelper = new THREE.GridHelper(100, 50, t.gridColor, t.gridColor);
+    gridHelper.position.y = -0.01;
+    scene.add(gridHelper);
+  }
+
+  // Camera Management
+  if (currentTheme === 'isometric') {
+    currentCamera = orthographicCamera;
+    controls.object = currentCamera;
+    // Lock controls for true isometric
+    controls.enableRotate = false;
+    currentCamera.position.set(50, 50, 50);
+  } else {
+    currentCamera = perspectiveCamera;
+    controls.object = currentCamera;
+    controls.enableRotate = true;
+  }
+  renderPass.camera = currentCamera;
+  controls.update();
+
+  // Re-build grid if data exists so completely new materials apply
+  if (currentData) {
+    buildGrid(currentData);
+  }
+}
+
 function animate() {
   requestAnimationFrame(animate);
 
-  // Defensive check
-  if (!renderer || !scene || !camera || !clock) return;
+  if (!renderer || !scene || !currentCamera || !clock) return;
 
-  // ✔ 1. Get Delta correctly
   const dt = clock.getDelta();
-
   if (controls) controls.update();
 
-  // Grid Animation Logic
   if (cubes.length > 0) {
     for (let i = 0; i < cubes.length; i++) {
       const cube = cubes[i];
       const target = targetHeights[i] || BASE_HEIGHT;
-      
       if (cube.scale.y < target) {
         cube.scale.y += (target - cube.scale.y) * 8 * dt;
         if (target - cube.scale.y < 0.001) cube.scale.y = target;
@@ -141,8 +236,11 @@ function animate() {
 
   checkIntersections();
 
-  // ✔ Execute final render call
-  renderer.render(scene, camera);
+  if (THEMES[currentTheme].useBloom) {
+    composer.render();
+  } else {
+    renderer.render(scene, currentCamera);
+  }
 }
 
 async function handleSearch(e) {
@@ -158,14 +256,15 @@ async function handleSearch(e) {
 
   try {
     const data = await fetchGitHubContributions(username);
+    currentData = data;
     
     const debugCube = scene.getObjectByName('debug-cube');
     if (debugCube) scene.remove(debugCube);
 
-    buildGrid(data);
-    showStatus(`Visualizing @${username}`);
+    buildGrid(currentData);
+    showStatus(`Visualizing @${username} in ${currentTheme.toUpperCase()} mode`);
   } catch (err) {
-    console.error('[3D Engine] Fetch failed:', err);
+    console.error('Fetch failed:', err);
     showStatus(`Error: ${err.message}`, 'error');
   } finally {
     if (btn) {
@@ -176,15 +275,10 @@ async function handleSearch(e) {
 }
 
 function buildGrid(data) {
-  // ✔ 6. Data Issue check: prevent crashes on undefined data
-  if (!data || !data.weeks) {
-    console.log("No data returned or invalid format.");
-    showStatus("No contribution data found.", "error");
-    return;
-  }
-
+  if (!data || !data.weeks) return;
   clearGrid();
 
+  const t = THEMES[currentTheme];
   const weeks = data.weeks;
   const numWeeks = weeks.length;
   const numDays = 7;
@@ -212,14 +306,23 @@ function buildGrid(data) {
         rawHeight = BASE_HEIGHT + (ratio * MAX_HEIGHT_SCALE * 4);
       }
 
+      // Skyline Neon Theme applies emissive glow instead of standard color
+      const isNeon = currentTheme === 'skyline';
+      const activeColor = t.colorLow.clone().lerp(t.colorHigh, ratio);
+      const isZero = day.contributionCount === 0;
+
       const material = new THREE.MeshStandardMaterial({
-        color: day.contributionCount === 0 ? 0x1e293b : COLOR_LOW.clone().lerp(COLOR_HIGH, ratio),
-        roughness: 0.3,
-        metalness: 0.1,
+        color: isZero ? t.colorEmpty : (isNeon ? 0x000000 : activeColor), // Neon uses black base, heavily emissive
+        emissive: isZero ? 0x000000 : (isNeon ? activeColor : 0x000000), // Glow if neon
+        emissiveIntensity: isNeon && !isZero ? (0.5 + ratio * 1.5) : 0,
+        roughness: isNeon ? 0.1 : 0.3,
+        metalness: isNeon ? 0.8 : 0.1,
       });
 
       const cube = new THREE.Mesh(geometry, material);
       cube.position.set(getPositionX(wIndex), 0, getPositionZ(dIndex));
+      
+      // Animate from zero only if initial build, skip if just changing themes
       cube.scale.y = 0.01; 
       
       cube.castShadow = true;
@@ -228,9 +331,9 @@ function buildGrid(data) {
       cube.userData = {
         date: day.date,
         count: day.contributionCount,
+        originalEmissive: material.emissive.clone()
       };
 
-      // ✔ 7. Scene Issue Check: Actually add cubes to the scene
       scene.add(cube);
       cubes.push(cube);
       targetHeights.push(rawHeight);
@@ -239,7 +342,13 @@ function buildGrid(data) {
 
   if (controls) {
     const gridWidth = numWeeks * (CUBE_SIZE + GAP);
-    camera.position.set(0, gridWidth * 0.35, gridWidth * 0.6);
+    if (currentTheme === 'isometric') {
+      currentCamera.position.set(20, 20, 20); // Ortho distance
+      currentCamera.zoom = 5;
+      currentCamera.updateProjectionMatrix();
+    } else {
+      currentCamera.position.set(0, gridWidth * 0.35, gridWidth * 0.6);
+    }
     controls.target.set(0, 0, 0);
   }
 }
@@ -255,11 +364,24 @@ function clearGrid() {
 }
 
 function onWindowResize() {
-  if (camera && renderer) {
-    camera.aspect = window.innerWidth / window.innerHeight;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
+  if (!currentCamera || !renderer) return;
+
+  const aspect = window.innerWidth / window.innerHeight;
+  
+  if (currentCamera === perspectiveCamera) {
+    perspectiveCamera.aspect = aspect;
+    perspectiveCamera.updateProjectionMatrix();
+  } else {
+    const frustumSize = 40;
+    orthographicCamera.left = -frustumSize * aspect / 2;
+    orthographicCamera.right = frustumSize * aspect / 2;
+    orthographicCamera.top = frustumSize / 2;
+    orthographicCamera.bottom = -frustumSize / 2;
+    orthographicCamera.updateProjectionMatrix();
   }
+
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 }
 
 function onMouseMove(event) {
@@ -275,19 +397,21 @@ function onMouseMove(event) {
 }
 
 function checkIntersections() {
-  if (!raycaster || !mouse || !camera || cubes.length === 0) return;
+  if (!raycaster || !mouse || !currentCamera || cubes.length === 0) return;
 
-  raycaster.setFromCamera(mouse, camera);
+  raycaster.setFromCamera(mouse, currentCamera);
   const intersects = raycaster.intersectObjects(cubes);
 
   if (intersects.length > 0) {
     const object = intersects[0].object;
 
     if (hoveredCube !== object) {
-      if (hoveredCube) hoveredCube.material.emissive.setHex(0x000000);
+      if (hoveredCube) {
+        hoveredCube.material.emissive.copy(hoveredCube.userData.originalEmissive);
+      }
       
       hoveredCube = object;
-      hoveredCube.material.emissive.copy(COLOR_ACTIVE).multiplyScalar(0.25);
+      hoveredCube.material.emissive.setHex(0xffffff);
 
       const { date, count } = hoveredCube.userData;
       if (tooltipDate && tooltipCount) {
@@ -300,7 +424,7 @@ function checkIntersections() {
     }
   } else {
     if (hoveredCube) {
-      hoveredCube.material.emissive.setHex(0x000000);
+      hoveredCube.material.emissive.copy(hoveredCube.userData.originalEmissive);
       hoveredCube = null;
       tooltip?.classList.add('hidden');
     }

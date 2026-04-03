@@ -130,6 +130,34 @@ button:disabled {
   transform: none;
 }
 
+.theme-selector {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+  justify-content: center;
+  border-top: 1px solid var(--panel-border);
+  padding-top: 1rem;
+}
+
+.theme-btn {
+  background: transparent;
+  color: var(--text-muted);
+  border: 1px solid var(--panel-border);
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  box-shadow: none;
+}
+
+.theme-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.theme-btn.active {
+  background: var(--text-main);
+  color: var(--bg-color);
+  border-color: var(--text-main);
+}
+
 .status {
   pointer-events: auto;
   margin-top: 1.5rem;
