@@ -22,7 +22,7 @@ jobs:
 
       - name: Run SVG Generator Script
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: node scripts/generate-calendar.js
 
