@@ -156,26 +156,34 @@ function buildSVG(calendar) {
 
 async function main() {
   console.log('[+] Starting 3D Isometric SVG Generation...');
-  if (!GITHUB_TOKEN) {
-    console.error('[-] Error: GITHUB_TOKEN environment variable not set.');
-    // Fail gracefully with a dummy file if needed, but erroring lets Action know it failed.
+  
+  if (!GITHUB_TOKEN || GITHUB_TOKEN.trim() === "") {
+    console.error('[-] CRITICAL ERROR: GITHUB_TOKEN environment variable is MISSING or EMPTY.');
+    console.error('[!] Ensure you added "VERCEL_TOKEN" to your GitHub Repository Secrets.');
     process.exit(1);
+  } else {
+    console.log(`[+] Token found (Length: ${GITHUB_TOKEN.length} chars)`);
   }
 
   try {
     const calendar = await fetchContributions();
-    console.log(`[+] Fetched data. Total contributions: ${calendar.totalContributions}`);
+    console.log(`[+] Successfully fetched calendar. Total contributions: ${calendar.totalContributions}`);
     
     const svgGrid = buildSVG(calendar);
     
     if (!fs.existsSync(OUTPUT_DIR)){
+        console.log(`[+] Creating output directory: ${OUTPUT_DIR}`);
         fs.mkdirSync(OUTPUT_DIR, { recursive: true });
     }
     
     fs.writeFileSync(OUTPUT_FILE, svgGrid);
     console.log(`[+] Successfully wrote SVG graphic to ${OUTPUT_FILE}`);
   } catch (err) {
-    console.error('[-] Process failed:', err.message);
+    console.error('[-] ❌ PROCESS FAILED ❌');
+    console.error('[-] Error Message:', err.message);
+    if (err.stack) {
+        console.error('[-] Stack Trace:', err.stack);
+    }
     process.exit(1);
   }
 }
