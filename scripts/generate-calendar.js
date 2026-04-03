@@ -153,8 +153,8 @@ function buildSVG(calendar) {
   const vBoxY = Math.floor(-totalH / 2);
 
   // 📝 Helpers for Icons
-  function drawIcon(path, x, y, color) {
-    return `<g transform="translate(${x}, ${y - 12}) scale(0.65)"><path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  function drawIcon(svgElements, x, y, color) {
+    return `<g transform="translate(${x}, ${y - 12}) scale(0.65)" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${svgElements}</g>`;
   }
 
   const primaryIconColor = '#8b949e'; 
