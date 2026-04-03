@@ -112,7 +112,7 @@ function buildSVG(calendar) {
   const svgElements = [];
   const STROKE_COLOR = 'rgba(27,31,35,0.1)'; 
   const STROKE_WIDTH = '0.5';
-  const GRID_STROKE = '#d0d7de';
+  const GRID_STROKE = '#57606a'; // Darker opaque grey for uniform contrast
   const GRID_STROKE_WIDTH = '1';
   weeks.forEach((week, wIndex) => {
     week.contributionDays.forEach((day, dIndex) => {
@@ -145,32 +145,65 @@ function buildSVG(calendar) {
   });
 
   const calendarWidth = Math.ceil(DX * (weeks.length + 8));
-  const statsWidth = 250;
+  const statsWidth = 280;
   const totalW = calendarWidth + statsWidth;
-  const totalH = Math.ceil(DY * (weeks.length + 8) + (MAX_HEIGHT_SCALE * 14) + 100);
+  const totalH = Math.ceil(DY * (weeks.length + 8) + (MAX_HEIGHT_SCALE * 14) + 120);
   
   const vBoxX = Math.floor(-calendarWidth / 2);
   const vBoxY = Math.floor(-totalH / 2);
 
+  // 📝 Helpers for Icons
+  function drawIcon(path, x, y, color) {
+    return `<g transform="translate(${x}, ${y - 12}) scale(0.65)"><path d="${path}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></g>`;
+  }
+
+  const primaryIconColor = '#8b949e'; 
+  const titleIconColor = '#58a6ff'; 
+
+  const calendarIcon = '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>';
+  const stacksIcon = '<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>';
+  const flameIcon = '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.242.062-4.966.24-.606.012-.872-.25-.688A10.02 10.02 0 0 0 5 11c0 3.866 3.134 7 7 7s7-3.134 7-7a9.972 9.972 0 0 0-2.312-6.342c-.227-.272-.619-.244-.543.085.344 1.5.097 3.551-1.145 5.257"/>';
+  const starIcon = '<circle cx="12" cy="12" r="3"/><path d="M12 5V3M12 21v-2M5 12H3M21 12h-2M6.343 17.657l-1.414 1.414M19.07 4.93l-1.414 1.414M17.657 17.657l1.414 1.414M4.93 4.93l1.414 1.414"/>';
+  const nodeIcon = '<circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/>';
+  const highestIcon = '<line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/>';
+  const avgIcon = '<polyline points="16 18 20 14 24 18"/><polyline points="8 6 4 10 0 6"/><line x1="20" y1="14" x2="20" y2="22"/><line x1="4" y1="10" x2="4" y2="2"/><line x1="12" y1="12" x2="12" y2="12"/>';
+
+  const textStyle = 'fill:#8b949e; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji; font-size:14px;';
+  const labelStyle = 'fill:#58a6ff; font-weight:400; font-family:inherit; font-size:16px;';
+  
+  // 📝 Title Layout
+  const titleSection = `
+    <g transform="translate(${vBoxX + 40}, ${vBoxY + 30})">
+      ${drawIcon(calendarIcon, 0, 0, titleIconColor)}
+      <text x="22" y="3" style="${labelStyle}">Contributions calendar</text>
+    </g>
+  `;
+
   // 📝 Stats Sidebar Logic
   const statsX = Math.floor(calendarWidth / 2) + 20;
   const statsY = -40;
-  
-  const textStyle = 'fill:#8b949e; font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif,Apple Color Emoji,Segoe UI Emoji; font-size:12px;';
-  const labelStyle = 'fill:#58a6ff; font-weight:bold; font-family:inherit; font-size:14px;';
-  const valueStyle = 'fill:#c9d1d9; font-family:inherit; font-weight:bold; font-size:14px;';
 
   const statsSection = `
     <g transform="translate(${statsX}, ${statsY})">
-      <text y="0" style="${labelStyle}">Contributions stats</text>
-      <text y="30" style="${textStyle}">Total:</text> <text x="50" y="30" style="${valueStyle}">${totalCount}</text>
+      ${drawIcon(stacksIcon, 0, 0, titleIconColor)}
+      <text x="22" y="3" style="${labelStyle}">Commits streaks</text>
       
-      <text y="60" style="${labelStyle}">Commits streaks</text>
-      <text y="90" style="${textStyle}">Best streak:</text> <text x="80" y="90" style="${valueStyle}">${bestStreak} days</text>
+      ${drawIcon(flameIcon, 0, 28, primaryIconColor)}
+      <text x="22" y="31" style="${textStyle}">Current streak ${currentStreak} day${currentStreak !== 1 ? 's' : ''}</text>
       
-      <text y="120" style="${labelStyle}">Commits per day</text>
-      <text y="150" style="${textStyle}">Highest day:</text> <text x="85" y="150" style="${valueStyle}">${maxCount}</text>
-      <text y="175" style="${textStyle}">Average:</text> <text x="65" y="175" style="${valueStyle}">${avgPerDay}</text>
+      ${drawIcon(starIcon, 0, 56, primaryIconColor)}
+      <text x="22" y="59" style="${textStyle}">Best streak ${bestStreak} days</text>
+      
+      <g transform="translate(0, 40)">
+        ${drawIcon(nodeIcon, 0, 60, titleIconColor)}
+        <text x="22" y="63" style="${labelStyle}">Commits per day</text>
+        
+        ${drawIcon(highestIcon, 0, 88, primaryIconColor)}
+        <text x="22" y="91" style="${textStyle}">Highest in a day at ${maxCount}</text>
+        
+        ${drawIcon(avgIcon, 0, 116, primaryIconColor)}
+        <text x="22" y="119" style="${textStyle}">Average per day at ~${avgPerDay}</text>
+      </g>
     </g>
   `;
 
@@ -178,7 +211,7 @@ function buildSVG(calendar) {
   const bg = `<rect x="${vBoxX}" y="${vBoxY}" width="${totalW}" height="${totalH}" fill="none"/>`;
   const svgClose = '</svg>';
   
-  return (svgOpen + bg + svgElements.join('') + statsSection + svgClose).replace(/>\s+</g, '><').trim();
+  return (svgOpen + bg + titleSection + svgElements.join('') + statsSection + svgClose).replace(/>\s+</g, '><').trim();
 }
 
 async function main() {
