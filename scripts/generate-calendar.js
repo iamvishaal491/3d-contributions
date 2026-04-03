@@ -177,7 +177,7 @@ async function main() {
   
   if (!GITHUB_TOKEN || GITHUB_TOKEN.trim() === "") {
     console.error('[-] CRITICAL ERROR: GITHUB_TOKEN environment variable is MISSING or EMPTY.');
-    console.error('[!] Ensure you added "VERCEL_TOKEN" to your GitHub Repository Secrets.');
+    console.error('[!] Ensure you added "GH_TOKEN" to your GitHub Repository Secrets.');
     process.exit(1);
   } else {
     console.log(`[+] Token found (Length: ${GITHUB_TOKEN.length} chars)`);

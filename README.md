@@ -84,7 +84,7 @@ The `output/isometric-calendar.svg` is generated automatically via `scripts/gene
 1. Go to your repository on GitHub.
 2. Navigate to **Settings → Secrets and variables → Actions → New repository secret**.
 3. Add the following secret:
-   - **Name:** `GITHUB_TOKEN`
+   - **Name:** `GH_TOKEN`
    - **Value:** A Personal Access Token (PAT) with the following scopes:
      - `read:user`
      - `repo`
