@@ -32,113 +32,137 @@ const THEMES = {
 };
 
 // ─────────────────────────────────────────────────────────────
-//  SHARED VERTEX SHADER  (all 5 skins)
+//  SHARED VERTEX SHADER  (all skins)
 // ─────────────────────────────────────────────────────────────
 const vertexShader = `
   varying vec2 vUv;
-  varying vec3 vWorldPos;
   uniform float uHeight;
   void main() {
     vUv = uv;
-    vUv.y *= uHeight;  // tile vertically
-    vWorldPos = (modelMatrix * vec4(position, 1.0)).xyz;
+    vUv.y *= uHeight;  // tile vertically with tower height
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
-// ─────────────────────────────────────────────────────────────
-//  SKIN 1 – Classic Dense Grid  (purple/blue)
-// ─────────────────────────────────────────────────────────────
-const skin1Frag = `
-  uniform float uTime;
-  varying vec2 vUv;
-  void main() {
-    vec2 gv = fract(vUv * vec2(4.0, 6.0));
-    float col = step(0.12, gv.x) * step(0.12, gv.y)
-              * step(gv.x, 0.88) * step(gv.y, 0.88);
-    vec3 winColor = vec3(0.54, 0.17, 0.89);
-    vec3 base = vec3(0.04, 0.02, 0.06);
-    gl_FragColor = vec4(base + winColor * col * 1.4, 1.0);
-  }
-`;
-
-// ─────────────────────────────────────────────────────────────
-//  SKIN 2 – Sparse Random Grid  (slightly dimmed windows)
-// ─────────────────────────────────────────────────────────────
-const skin2Frag = `
-  uniform float uTime;
-  varying vec2 vUv;
+// Shared rand helper injected into all fragment shaders
+const randFn = `
   float rand(vec2 co) {
     return fract(sin(dot(co, vec2(12.9898, 78.233))) * 43758.5453);
   }
+`;
+
+// ─────────────────────────────────────────────────────────────
+//  SKIN A – Dense Grid, Multi-Color (pink/blue/warm-white)
+//  Each window cell is independently colored.
+//  Soft inner glow makes light feel like it's coming from inside.
+// ─────────────────────────────────────────────────────────────
+const skinAFrag = `
+  uniform float uTime;
+  varying vec2 vUv;
+  ${randFn}
   void main() {
     vec2 cell = floor(vUv * vec2(4.0, 6.0));
-    vec2 gv  = fract(vUv * vec2(4.0, 6.0));
-    float on_off = step(0.45, rand(cell));
-    float window = step(0.15, gv.x) * step(0.15, gv.y)
-                 * step(gv.x, 0.85) * step(gv.y, 0.85);
-    float em = window * on_off;
-    vec3 winColor = vec3(0.4, 0.1, 0.85);
-    vec3 base = vec3(0.04, 0.02, 0.06);
-    gl_FragColor = vec4(base + winColor * em + winColor * window * 0.05, 1.0);
-  }
-`;
+    vec2 gv   = fract(vUv * vec2(4.0, 6.0));
 
-// ─────────────────────────────────────────────────────────────
-//  SKIN 3 – Vertical Strip Grid  (cyan)
-// ─────────────────────────────────────────────────────────────
-const skin3Frag = `
-  uniform float uTime;
-  varying vec2 vUv;
-  void main() {
-    float strip = step(0.1, fract(vUv.x * 3.0)) * step(fract(vUv.x * 3.0), 0.4);
-    float line  = step(0.88, fract(vUv.y * 8.0));
-    float em    = strip * (1.0 - line) * 1.6;
-    vec3 winColor = vec3(0.0, 0.9, 1.0);
-    vec3 base = vec3(0.01, 0.02, 0.05);
-    gl_FragColor = vec4(base + winColor * em, 1.0);
-  }
-`;
+    // Window shape
+    float window = step(0.1, gv.x) * step(0.1, gv.y)
+                 * step(gv.x, 0.9) * step(gv.y, 0.9);
 
-// ─────────────────────────────────────────────────────────────
-//  SKIN 4 – Edge Highlight Grid  (magenta)
-// ─────────────────────────────────────────────────────────────
-const skin4Frag = `
-  uniform float uTime;
-  varying vec2 vUv;
-  void main() {
-    vec2 uv = vUv;
-    // UV is per-face 0..1.  Edge bands
-    float edgeX = step(uv.x, 0.07) + step(0.93, uv.x);
-    float edgeY = step(uv.y, 0.03) + step(0.97, uv.y);
-    float edge  = clamp(edgeX + edgeY, 0.0, 1.0);
-    // Thin horizontal lines across edges
-    float lines = step(0.9, fract(uv.y * 12.0)) * edgeX;
-    float em    = edge * 1.8 + lines * 1.2;
-    vec3 winColor = vec3(1.0, 0.0, 1.0);
+    // Inner glow gradient (brighter toward center)
+    vec2 centered = 1.0 - abs(gv * 2.0 - 1.0);
+    float innerGlow = centered.x * centered.y * window;
+
+    // Per-cell random color: pink / blue / warm white
+    float r = rand(cell);
+    vec3 neonPink  = vec3(1.0, 0.04, 0.56);
+    vec3 neonBlue  = vec3(0.04, 0.4,  1.0);
+    vec3 warmWhite = vec3(1.0, 0.95, 0.55);
+    vec3 winColor = r < 0.38 ? neonPink
+                  : r < 0.72 ? neonBlue
+                  : warmWhite;
+
     vec3 base = vec3(0.02, 0.01, 0.03);
-    gl_FragColor = vec4(base + winColor * em, 1.0);
+    vec3 col  = base
+              + winColor * window    * 1.1
+              + winColor * innerGlow * 0.9;
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 
 // ─────────────────────────────────────────────────────────────
-//  SKIN 5 – Pulse Grid  (teal, animated)
+//  SKIN B – Sparse Grid, Neon Pink / Neon Violet
+//  ~55% of windows randomly on. Each lit window picks pink or violet.
 // ─────────────────────────────────────────────────────────────
-const skin5Frag = `
+const skinBFrag = `
   uniform float uTime;
   varying vec2 vUv;
+  ${randFn}
   void main() {
-    vec2 gv = fract(vUv * vec2(4.0, 6.0));
-    float col = step(0.12, gv.x) * step(0.12, gv.y)
-              * step(gv.x, 0.88) * step(gv.y, 0.88);
-    float pulse = 0.7 + 0.3 * sin(uTime * 2.5);
-    vec3 winColor = vec3(0.0, 1.0, 0.8);
-    vec3 base = vec3(0.02, 0.04, 0.04);
-    gl_FragColor = vec4(base + winColor * col * pulse * 1.5, 1.0);
+    vec2 cell = floor(vUv * vec2(4.0, 6.0));
+    vec2 gv   = fract(vUv * vec2(4.0, 6.0));
+
+    float on_off = step(0.44, rand(cell));
+    float window = step(0.13, gv.x) * step(0.13, gv.y)
+                 * step(gv.x, 0.87) * step(gv.y, 0.87);
+
+    // Inner glow
+    vec2 centered = 1.0 - abs(gv * 2.0 - 1.0);
+    float innerGlow = centered.x * centered.y * window * on_off;
+
+    // Per-cell: neon pink or neon violet
+    float r2 = rand(cell + vec2(5.1, 2.9));
+    vec3 neonPink   = vec3(1.0,  0.04, 0.56);
+    vec3 neonViolet = vec3(0.65, 0.0,  1.0);
+    vec3 winColor = r2 < 0.5 ? neonPink : neonViolet;
+
+    vec3 base = vec3(0.02, 0.01, 0.04);
+    vec3 col  = base
+              + winColor * window * on_off * 1.25
+              + winColor * innerGlow       * 0.7;
+    gl_FragColor = vec4(col, 1.0);
   }
 `;
 
-const SKIN_FRAGS = [skin1Frag, skin2Frag, skin3Frag, skin4Frag, skin5Frag];
+// ─────────────────────────────────────────────────────────────
+//  SKIN C – Pulsing Dense Grid (animated version of A)
+//  Same multi-color windows but intensity breathes with sin(time).
+// ─────────────────────────────────────────────────────────────
+const skinCFrag = `
+  uniform float uTime;
+  varying vec2 vUv;
+  ${randFn}
+  void main() {
+    vec2 cell = floor(vUv * vec2(4.0, 6.0));
+    vec2 gv   = fract(vUv * vec2(4.0, 6.0));
+
+    float window = step(0.1, gv.x) * step(0.1, gv.y)
+                 * step(gv.x, 0.9) * step(gv.y, 0.9);
+
+    vec2 centered = 1.0 - abs(gv * 2.0 - 1.0);
+    float innerGlow = centered.x * centered.y * window;
+
+    // Per-cell color: pink / blue / warm-white
+    float r = rand(cell);
+    vec3 neonPink  = vec3(1.0, 0.04, 0.56);
+    vec3 neonBlue  = vec3(0.04, 0.4,  1.0);
+    vec3 warmWhite = vec3(1.0, 0.95, 0.55);
+    vec3 winColor = r < 0.38 ? neonPink
+                  : r < 0.72 ? neonBlue
+                  : warmWhite;
+
+    // Pulse: each cell oscillates at a slightly different phase
+    float phase = rand(cell + vec2(1.1, 3.7)) * 6.28318;
+    float pulse = 0.65 + 0.35 * sin(uTime * 2.2 + phase);
+
+    vec3 base = vec3(0.02, 0.01, 0.03);
+    vec3 col  = base
+              + winColor * window    * pulse * 1.2
+              + winColor * innerGlow * pulse * 0.8;
+    gl_FragColor = vec4(col, 1.0);
+  }
+`;
+
+const SKIN_FRAGS = [skinAFrag, skinBFrag, skinCFrag];
 
 function makeSkinMaterial(skinIndex: number, towerHeight: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
@@ -151,11 +175,14 @@ function makeSkinMaterial(skinIndex: number, towerHeight: number): THREE.ShaderM
   });
 }
 
+// Height-based selection:
+// Short  → sparse pink/violet (B)  or dense multi-color (A)
+// Medium → dense multi-color (A)
+// Tall   → pulsing dense (C)
 function selectSkin(ratio: number): number {
-  if (ratio < 0.25) return Math.random() < 0.5 ? 0 : 1; // dense or sparse
-  if (ratio < 0.55) return 2;                              // vertical strip
-  if (ratio < 0.80) return 3;                              // edge highlight
-  return 4;                                                // pulse (tallest)
+  if (ratio < 0.35) return Math.random() < 0.55 ? 1 : 0;  // B or A
+  if (ratio < 0.72) return 0;                               // A
+  return 2;                                                  // C (pulsing)
 }
 
 export interface ThreeVisualizerRef {
