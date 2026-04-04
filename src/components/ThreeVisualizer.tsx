@@ -64,27 +64,28 @@ const skinAFrag = `
     vec2 cell = floor(vUv * vec2(4.0, 6.0));
     vec2 gv   = fract(vUv * vec2(4.0, 6.0));
 
-    // Window shape
-    float window = step(0.1, gv.x) * step(0.1, gv.y)
-                 * step(gv.x, 0.9) * step(gv.y, 0.9);
+    // Window shape — slightly thicker frame so fewer lit pixels
+    float window = step(0.18, gv.x) * step(0.18, gv.y)
+                 * step(gv.x, 0.82) * step(gv.y, 0.82);
 
-    // Inner glow gradient (brighter toward center)
+    // Soft inner glow
     vec2 centered = 1.0 - abs(gv * 2.0 - 1.0);
     float innerGlow = centered.x * centered.y * window;
 
     // Per-cell random color: pink / blue / warm white
+    // Reduce warm-white share to avoid blowout (only 15%)
     float r = rand(cell);
-    vec3 neonPink  = vec3(1.0, 0.04, 0.56);
+    vec3 neonPink  = vec3(1.0,  0.04, 0.56);
     vec3 neonBlue  = vec3(0.04, 0.4,  1.0);
-    vec3 warmWhite = vec3(1.0, 0.95, 0.55);
-    vec3 winColor = r < 0.38 ? neonPink
-                  : r < 0.72 ? neonBlue
+    vec3 warmWhite = vec3(1.0,  0.92, 0.45);
+    vec3 winColor = r < 0.42 ? neonPink
+                  : r < 0.85 ? neonBlue
                   : warmWhite;
 
-    vec3 base = vec3(0.02, 0.01, 0.03);
+    vec3 base = vec3(0.015, 0.008, 0.02);
     vec3 col  = base
-              + winColor * window    * 1.1
-              + winColor * innerGlow * 0.9;
+              + winColor * window    * 0.55   // dimmer flat emission
+              + winColor * innerGlow * 0.28;  // subtle inner glow only
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -101,24 +102,23 @@ const skinBFrag = `
     vec2 cell = floor(vUv * vec2(4.0, 6.0));
     vec2 gv   = fract(vUv * vec2(4.0, 6.0));
 
-    float on_off = step(0.44, rand(cell));
-    float window = step(0.13, gv.x) * step(0.13, gv.y)
-                 * step(gv.x, 0.87) * step(gv.y, 0.87);
+    // ~40% of windows on (was 56%)
+    float on_off = step(0.60, rand(cell));
+    float window = step(0.18, gv.x) * step(0.18, gv.y)
+                 * step(gv.x, 0.82) * step(gv.y, 0.82);
 
-    // Inner glow
     vec2 centered = 1.0 - abs(gv * 2.0 - 1.0);
     float innerGlow = centered.x * centered.y * window * on_off;
 
-    // Per-cell: neon pink or neon violet
     float r2 = rand(cell + vec2(5.1, 2.9));
     vec3 neonPink   = vec3(1.0,  0.04, 0.56);
     vec3 neonViolet = vec3(0.65, 0.0,  1.0);
     vec3 winColor = r2 < 0.5 ? neonPink : neonViolet;
 
-    vec3 base = vec3(0.02, 0.01, 0.04);
+    vec3 base = vec3(0.015, 0.008, 0.02);
     vec3 col  = base
-              + winColor * window * on_off * 1.25
-              + winColor * innerGlow       * 0.7;
+              + winColor * window * on_off * 0.58
+              + winColor * innerGlow       * 0.22;
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -135,29 +135,28 @@ const skinCFrag = `
     vec2 cell = floor(vUv * vec2(4.0, 6.0));
     vec2 gv   = fract(vUv * vec2(4.0, 6.0));
 
-    float window = step(0.1, gv.x) * step(0.1, gv.y)
-                 * step(gv.x, 0.9) * step(gv.y, 0.9);
+    float window = step(0.18, gv.x) * step(0.18, gv.y)
+                 * step(gv.x, 0.82) * step(gv.y, 0.82);
 
     vec2 centered = 1.0 - abs(gv * 2.0 - 1.0);
     float innerGlow = centered.x * centered.y * window;
 
-    // Per-cell color: pink / blue / warm-white
     float r = rand(cell);
-    vec3 neonPink  = vec3(1.0, 0.04, 0.56);
+    vec3 neonPink  = vec3(1.0,  0.04, 0.56);
     vec3 neonBlue  = vec3(0.04, 0.4,  1.0);
-    vec3 warmWhite = vec3(1.0, 0.95, 0.55);
-    vec3 winColor = r < 0.38 ? neonPink
-                  : r < 0.72 ? neonBlue
+    vec3 warmWhite = vec3(1.0,  0.92, 0.45);
+    vec3 winColor = r < 0.42 ? neonPink
+                  : r < 0.85 ? neonBlue
                   : warmWhite;
 
-    // Pulse: each cell oscillates at a slightly different phase
+    // Gentle pulse — narrow range so it doesn't spike bright
     float phase = rand(cell + vec2(1.1, 3.7)) * 6.28318;
-    float pulse = 0.65 + 0.35 * sin(uTime * 2.2 + phase);
+    float pulse = 0.75 + 0.25 * sin(uTime * 1.8 + phase);
 
-    vec3 base = vec3(0.02, 0.01, 0.03);
+    vec3 base = vec3(0.015, 0.008, 0.02);
     vec3 col  = base
-              + winColor * window    * pulse * 1.2
-              + winColor * innerGlow * pulse * 0.8;
+              + winColor * window    * pulse * 0.55
+              + winColor * innerGlow * pulse * 0.22;
     gl_FragColor = vec4(col, 1.0);
   }
 `;
@@ -404,7 +403,7 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     const rPass = new RenderPass(scene, orthoCam);
     composer.addPass(rPass);
     renderPassRef.current = rPass;
-    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 2.8, 0.5, 0.82);
+    const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.85, 0.25, 0.9);
     composer.addPass(bloom);
     bloomPassRef.current = bloom;
 
