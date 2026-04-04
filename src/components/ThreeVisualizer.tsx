@@ -51,24 +51,31 @@ const randFn = `
   }
 `;
 
-// Shared palette helper: picks 2 colors from {pink, violet, cyan} per building.
+// Shared palette helper: picks 2 colors from {pink, violet, cyan, orange} per building.
 // uSeed is a unique float per building. Returns colorA or colorB based on cellRand.
 const paletteFn = `
   vec3 getWinColor(float cellRand, float seed) {
     vec3 neonPink   = vec3(1.0,  0.04, 0.56);
     vec3 neonViolet = vec3(0.65, 0.0,  1.0);
     vec3 neonCyan   = vec3(0.0,  0.9,  1.0);
-    // Pick the pair for this building
-    float pairIdx = floor(rand(vec2(seed, seed * 0.73 + 1.3)) * 3.0);
-    vec3 colorA = pairIdx < 1.0 ? neonPink
-                : pairIdx < 2.0 ? neonPink
-                : neonCyan;
+    vec3 neonOrange = vec3(1.0,  0.45, 0.04); // warm amber/orange
+
+    // 5 pairs — orange features in 2 of them (~40% of buildings)
+    float pairIdx = floor(rand(vec2(seed, seed * 0.73 + 1.3)) * 5.0);
+    vec3 colorA = pairIdx < 1.0 ? neonPink      // 0: pink  + cyan
+                : pairIdx < 2.0 ? neonPink      // 1: pink  + violet
+                : pairIdx < 3.0 ? neonCyan      // 2: cyan  + violet
+                : pairIdx < 4.0 ? neonOrange    // 3: orange + pink
+                : neonOrange;                   // 4: orange + cyan
     vec3 colorB = pairIdx < 1.0 ? neonCyan
                 : pairIdx < 2.0 ? neonViolet
-                : neonViolet;
-    // Per-cell: ~30% dark, rest split 50/50 between A and B
-    if (cellRand < 0.30) return vec3(0.0);     // lights off
-    return cellRand < 0.65 ? colorA : colorB;
+                : pairIdx < 3.0 ? neonViolet
+                : pairIdx < 4.0 ? neonPink
+                : neonCyan;
+
+    // ~42% dark (more unlit rooms than before), split rest 50/50
+    if (cellRand < 0.42) return vec3(0.0);
+    return cellRand < 0.71 ? colorA : colorB;
   }
 `;
 
