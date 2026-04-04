@@ -238,39 +238,181 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     shipsRef.current = [];
   };
 
-  const createDrone = (color: number) => {
-    const droneGroup = new THREE.Group();
-    const bodyMat = new THREE.MeshStandardMaterial({ color: 0x050505, emissive: color, emissiveIntensity: 5 });
-    const body  = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.18, 0.45), bodyMat);
-    const wings = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.08, 1.4),  bodyMat);
-    const nose  = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.5, 6),   bodyMat);
-    nose.rotation.z = -Math.PI / 2;
-    nose.position.x = 0.6;
-    droneGroup.add(body, wings, nose);
-    return droneGroup;
+  // ── 4 ship builder functions ──────────────────────────────
+  const buildInterceptor = () => {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x1a1a2e, roughness: 0.8, metalness: 0.6 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0x00ccee, roughness: 0.5, metalness: 0.8 });
+    // Long body
+    g.add(Object.assign(new THREE.Mesh(new THREE.BoxGeometry(2.8, 0.14, 0.42), mat)));
+    // Nose tip
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.7, 4), accent);
+    nose.rotation.z = -Math.PI / 2; nose.position.x = 1.73;
+    g.add(nose);
+    // Wings
+    const makeWing = (zSign: number) => {
+      const w = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.05, 0.65), mat);
+      w.position.set(-0.2, -0.03, zSign * 0.52); w.rotation.z = zSign * 0.15;
+      return w;
+    };
+    g.add(makeWing(1), makeWing(-1));
+    // Tail fin
+    const fin = new THREE.Mesh(new THREE.BoxGeometry(0.35, 0.22, 0.04), mat);
+    fin.position.set(-1.2, 0.1, 0);
+    g.add(fin);
+    // Engine glow strip (very subtle)
+    const eng = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.38),
+      new THREE.MeshStandardMaterial({ color: 0x002244, emissive: 0x004488, emissiveIntensity: 0.4 }));
+    eng.position.set(-1.4, 0, 0);
+    g.add(eng);
+    return g;
   };
 
-  const spawnShips = () => {
-    if (themeRef.current !== 'skyline') return;
-    const palette = [0x00ffff, 0xff00ff, 0x00ff88];
+  const buildHoverDrone = () => {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x111118, roughness: 0.7, metalness: 0.7 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0x220033, emissive: 0x550088, emissiveIntensity: 0.3 });
+    // Flat hex base
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 0.08, 6), mat));
+    // Central dome
+    const dome = new THREE.Mesh(new THREE.SphereGeometry(0.32, 8, 5, 0, Math.PI * 2, 0, Math.PI / 2), accent);
+    dome.position.y = 0.1;
+    g.add(dome);
+    // 4 radial arms
+    for (let i = 0; i < 4; i++) {
+      const arm = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.05, 0.09), mat);
+      const a = (i / 4) * Math.PI * 2;
+      arm.position.set(Math.cos(a) * 0.45, 0.05, Math.sin(a) * 0.45);
+      arm.rotation.y = a;
+      g.add(arm);
+    }
+    // Rim ring detail (8-sided cylinder)
+    g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.03, 8, 1, true), mat));
+    return g;
+  };
+
+  const buildTriWingScout = () => {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x0d0d1a, roughness: 0.6, metalness: 0.7 });
+    const accent = new THREE.MeshStandardMaterial({ color: 0x001a00, emissive: 0x003300, emissiveIntensity: 0.35 });
+    // Central node
+    g.add(new THREE.Mesh(new THREE.OctahedronGeometry(0.3), accent));
+    // 3 wings at 120°
     for (let i = 0; i < 3; i++) {
-      const group = createDrone(palette[i]);
-      const trailGeo = new THREE.BufferGeometry();
-      const buf = new Float32Array(40 * 3);
-      trailGeo.setAttribute('position', new THREE.BufferAttribute(buf, 3));
-      const trailMat = new THREE.LineBasicMaterial({ color: palette[i], transparent: true, opacity: 0.55 });
-      const trail = new THREE.Line(trailGeo, trailMat);
+      const a = (i / 3) * Math.PI * 2;
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.04, 0.15), mat);
+      wing.rotation.y = a;
+      wing.position.set(Math.cos(a) * 0.6, 0, Math.sin(a) * 0.6);
+      // Wing tip
+      const tip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.12), mat);
+      tip.position.set(Math.cos(a) * 1.2, 0, Math.sin(a) * 1.2);
+      g.add(wing, tip);
+    }
+    return g;
+  };
+
+  const buildCoreFrameShip = () => {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshStandardMaterial({ color: 0x151520, roughness: 0.75, metalness: 0.5 });
+    const core = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.42, 0.42),
+      new THREE.MeshStandardMaterial({ color: 0x110011, emissive: 0x440022, emissiveIntensity: 0.3 }));
+    g.add(core);
+    // 4 corner strut posts
+    [[0.58,0,0.58],[-0.58,0,0.58],[0.58,0,-0.58],[-0.58,0,-0.58]].forEach(([ox,,oz]) => {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.72, 0.05), mat);
+      post.position.set(ox, 0, oz);
+      g.add(post);
+    });
+    // Horizontal crossbars at top / bottom
+    const barH = new THREE.BoxGeometry(1.22, 0.04, 0.04);
+    [0.36, -0.36].forEach(y => {
+      [0.58, -0.58].forEach(z => {
+        const b = new THREE.Mesh(barH, mat);
+        b.position.set(0, y, z);
+        g.add(b);
+      });
+    });
+    return g;
+  };
+
+  // ── Trail factory with per-vertex alpha fade ───────────────
+  const TRAIL_LEN = 28;
+  const makeTrail = (color: number): THREE.Line => {
+    const positions = new Float32Array(TRAIL_LEN * 3);
+    const alphas    = new Float32Array(TRAIL_LEN);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geo.setAttribute('aAlpha',   new THREE.BufferAttribute(alphas, 1));
+    const mat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: new THREE.Color(color) } },
+      vertexShader: `
+        attribute float aAlpha;
+        varying float vAlpha;
+        void main() {
+          vAlpha = aAlpha;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          if (vAlpha < 0.01) discard;
+          gl_FragColor = vec4(uColor, vAlpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+    return new THREE.Line(geo, mat);
+  };
+
+  // ── random path endpoints through/across city ────────────
+  const randomPath = (spread: number): [THREE.Vector3, THREE.Vector3] => {
+    const axis = Math.random() < 0.6 ? 'x' : 'z'; // mostly X (along weeks)
+    const y1 = 8 + Math.random() * 14;
+    const y2 = 8 + Math.random() * 14;
+    if (axis === 'x') {
+      const sign = Math.random() < 0.5 ? 1 : -1;
+      const z = (Math.random() - 0.5) * spread * 0.4;
+      return [
+        new THREE.Vector3(-spread * sign, y1, z),
+        new THREE.Vector3( spread * sign, y2, z + (Math.random() - 0.5) * spread * 0.3),
+      ];
+    } else {
+      const x = (Math.random() - 0.5) * spread;
+      return [
+        new THREE.Vector3(x + (Math.random()-0.5)*8, y1, -spread * 0.25),
+        new THREE.Vector3(x + (Math.random()-0.5)*8, y2,  spread * 0.25),
+      ];
+    }
+  };
+
+  // ── Create 4 spaceships ───────────────────────────────────
+  const createSpaceships = () => {
+    if (themeRef.current !== 'skyline') return;
+    const builders = [buildInterceptor, buildHoverDrone, buildTriWingScout, buildCoreFrameShip];
+    const trailColors = [0x00bbdd, 0x8800cc, 0x44dd88, 0xdd0055];
+    const spread = 38;
+    for (let i = 0; i < 4; i++) {
+      const group = builders[i]();
+      group.scale.setScalar(1.5);
+      const trail = makeTrail(trailColors[i]);
+      const [startPos, endPos] = randomPath(spread);
+      const startProgress = i * 0.22;
       sceneRef.current.add(group);
       sceneRef.current.add(trail);
       shipsRef.current.push({
-        group, trail,
+        group,
+        trail,
         history: [] as THREE.Vector3[],
-        angle: Math.random() * Math.PI * 2,
-        radius: 36 + i * 14,
-        speed: 0.25 + Math.random() * 0.22,
-        baseY: 14 + i * 5,
-        oscSpeed: 0.6 + Math.random() * 0.7,
-        oscAmp: 2.5 + Math.random() * 2,
+        startPos,
+        endPos,
+        progress: startProgress,
+        speed: 0.038 + Math.random() * 0.025,
+        sineAmp: 1.5 + Math.random() * 2.0,
+        sineFreq: 0.5 + Math.random() * 0.5,
+        spread,
       });
     }
   };
@@ -282,6 +424,10 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     scene.background = new THREE.Color(t.bg);
     scene.fog = new THREE.Fog(t.bg, t.fog, t.fogFar);
     if (gridHelperRef.current) { scene.remove(gridHelperRef.current); gridHelperRef.current = null; }
+
+    if (mode !== 'isometric') {
+      createSpaceships();
+    }
 
     if (mode === 'isometric') {
       cameraRef.current = orthoCamRef.current;
@@ -307,7 +453,7 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     buildGrid(data: any) {
       if (!data?.weeks) return;
       clearGrid();
-      if (themeRef.current === 'skyline') spawnShips();
+      if (themeRef.current === 'skyline') createSpaceships();
 
       const iso = themeRef.current === 'isometric';
       const currentTheme = THEMES[themeRef.current as keyof typeof THEMES] || THEMES.isometric;
@@ -441,22 +587,59 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
         if (m.uniforms?.uTime) m.uniforms.uTime.value = st;
       });
 
-      // Spaceships + trails
+      // ── Spaceships: path-based through-city movement ─────
       shipsRef.current.forEach(ship => {
-        ship.angle += ship.speed * dt;
-        const x = Math.cos(ship.angle) * ship.radius;
-        const z = Math.sin(ship.angle) * ship.radius;
-        const y = ship.baseY + Math.sin(st * ship.oscSpeed) * ship.oscAmp;
-        ship.group.position.set(x, y, z);
-        ship.group.lookAt(new THREE.Vector3(
-          Math.cos(ship.angle + 0.12) * ship.radius, y,
-          Math.sin(ship.angle + 0.12) * ship.radius
-        ));
-        ship.history.push(new THREE.Vector3(x, y, z));
-        if (ship.history.length > 40) ship.history.shift();
-        const pa = ship.trail.geometry.attributes.position;
-        ship.history.forEach((p: THREE.Vector3, i: number) => pa.setXYZ(i, p.x, p.y, p.z));
-        (pa as any).needsUpdate = true;
+        ship.progress += ship.speed * dt;
+
+        // When ship exits, generate a fresh path
+        if (ship.progress >= 1.0) {
+          const [s, e] = randomPath(ship.spread);
+          ship.startPos = s;
+          ship.endPos   = e;
+          ship.progress = 0;
+          ship.history  = [];
+        }
+
+        const t = ship.progress;
+        // Base linear interpolation
+        const pos = new THREE.Vector3().lerpVectors(ship.startPos, ship.endPos, t);
+
+        // Sinusoidal lateral deviation (perpendicular to travel dir, XZ plane)
+        const dir = new THREE.Vector3().subVectors(ship.endPos, ship.startPos).normalize();
+        const perp = new THREE.Vector3(-dir.z, 0, dir.x);
+        const lateralOffset = Math.sin(t * ship.sineFreq * Math.PI * 2) * ship.sineAmp;
+        pos.addScaledVector(perp, lateralOffset);
+
+        // Gentle vertical bob
+        pos.y += Math.sin(t * Math.PI * 3 + ship.progress * 2) * 1.5;
+
+        ship.group.position.copy(pos);
+
+        // Orient ship toward its next position
+        const ahead = new THREE.Vector3().lerpVectors(ship.startPos, ship.endPos, Math.min(t + 0.05, 1.0));
+        const aheadPerp = lateralOffset + Math.sin((t + 0.05) * ship.sineFreq * Math.PI * 2) * ship.sineAmp;
+        ahead.addScaledVector(perp, aheadPerp);
+        if (!ahead.equals(pos)) ship.group.lookAt(ahead);
+
+        // Trail: history ring of last TRAIL_LEN positions
+        ship.history.push(pos.clone());
+        if (ship.history.length > TRAIL_LEN) ship.history.shift();
+
+        const posAttr   = ship.trail.geometry.attributes.position as THREE.BufferAttribute;
+        const alphaAttr = ship.trail.geometry.attributes.aAlpha as THREE.BufferAttribute;
+        const n = ship.history.length;
+        for (let k = 0; k < TRAIL_LEN; k++) {
+          if (k < n) {
+            const p = ship.history[k];
+            posAttr.setXYZ(k, p.x, p.y, p.z);
+            alphaAttr.setX(k, (k / n) * 0.55); // tail fades to 0, head is 0.55
+          } else {
+            posAttr.setXYZ(k, 0, -9999, 0);    // hide unused points below ground
+            alphaAttr.setX(k, 0);
+          }
+        }
+        posAttr.needsUpdate   = true;
+        alphaAttr.needsUpdate = true;
       });
 
       const cam = cameraRef.current || orthoCam;
