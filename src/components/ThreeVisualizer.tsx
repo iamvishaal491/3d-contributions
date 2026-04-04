@@ -21,19 +21,19 @@ const THEMES = {
     useBloom: false,
     colorLow: new THREE.Color('#9be9a8'),
     colorHigh: new THREE.Color('#216e39'),
-    colorEmpty: 0xffffff, // White solid grid for 0 contributions
-    lineColor: 0x000000,  // Black lines
+    colorEmpty: 0xffffff,
+    lineColor: 0x000000,
   },
   skyline: {
-    bg: 0x0a0310,
+    bg: 0x020205,
     fog: 20,
-    fogFar: 150,
-    gridColor: 0xff00ff,
+    fogFar: 180,
+    gridColor: 0x111122,
     useBloom: true,
-    colorLow: new THREE.Color('#002244'),
+    colorLow: new THREE.Color('#001133'),
     colorHigh: new THREE.Color('#00ffff'),
-    colorEmpty: 0x110022,
-    lineColor: 0xff00ff,
+    colorEmpty: 0x111122,
+    lineColor: 0x00ffff,
   }
 };
 
@@ -62,6 +62,7 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
   const orthographicCameraRef = useRef<THREE.OrthographicCamera | null>(null);
   const cubesRef = useRef<THREE.Mesh[]>([]);
   const linesRef = useRef<THREE.LineSegments[]>([]);
+  const shipsRef = useRef<any[]>([]);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const clockRef = useRef(new THREE.Clock());
   const currentThemeModeRef = useRef<string>(theme);
@@ -89,6 +90,43 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
       sceneRef.current.remove(line);
     });
     linesRef.current = [];
+    
+    // Clear ships
+    shipsRef.current.forEach(ship => {
+      ship.mesh.geometry.dispose();
+      ship.mesh.material.dispose();
+      sceneRef.current.remove(ship.mesh);
+    });
+    shipsRef.current = [];
+  };
+
+  const createSpaceships = () => {
+    if (currentThemeModeRef.current !== 'skyline') return;
+    
+    const shipGeom = new THREE.ConeGeometry(0.4, 1.2, 3);
+    shipGeom.rotateX(Math.PI / 2);
+    
+    const colors = [0x00ffff, 0xff00ff, 0x00ff88];
+    
+    for (let i = 0; i < 3; i++) {
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x000000,
+        emissive: colors[i],
+        emissiveIntensity: 2,
+      });
+      const mesh = new THREE.Mesh(shipGeom, mat);
+      const ship = {
+        mesh,
+        angle: Math.random() * Math.PI * 2,
+        radius: 35 + Math.random() * 20,
+        speed: 0.2 + Math.random() * 0.3,
+        height: 15 + Math.random() * 15,
+        oscillationSpeed: 0.5 + Math.random(),
+        oscillationAmplitude: 2 + Math.random() * 3,
+      };
+      sceneRef.current.add(mesh);
+      shipsRef.current.push(ship);
+    }
   };
 
   const updateThemeSync = (mode: string) => {
@@ -116,15 +154,15 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     } else {
       cameraRef.current = perspectiveCameraRef.current;
       perspectiveCameraRef.current?.position.set(-80, 60, 150);
-      gridHelperRef.current = new THREE.GridHelper(400, 80, t.gridColor, t.gridColor);
+      gridHelperRef.current = new THREE.GridHelper(500, 100, t.gridColor, t.gridColor);
       scene.add(gridHelperRef.current);
       if (controlsRef.current) {
         controlsRef.current.maxPolarAngle = Math.PI / 2 - 0.1;
         controlsRef.current.minPolarAngle = 0.1;
       }
+      createSpaceships();
     }
 
-    // Sync Camera for Post-Processing & Controls
     if (cameraRef.current) {
       if (renderPassRef.current) renderPassRef.current.camera = cameraRef.current;
       if (controlsRef.current) {
@@ -141,6 +179,7 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     buildGrid(data: any) {
       if (!data || !data.weeks || !sceneRef.current) return;
       clearGrid();
+      if (currentThemeModeRef.current === 'skyline') createSpaceships();
 
       const currentTheme = THEMES[currentThemeModeRef.current as keyof typeof THEMES] || THEMES.isometric;
       const weeks = data.weeks;
@@ -162,38 +201,61 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
       weeks.forEach((week: any, wIndex: number) => {
         week.contributionDays?.forEach((day: any, dIndex: number) => {
           let ratio = day.contributionCount > 0 ? (Math.log(day.contributionCount + 1) / Math.log(maxCount + 1)) : 0;
-          let rawHeight = day.contributionCount > 0 ? (BASE_HEIGHT + ratio * MAX_HEIGHT_SCALE * 6) : BASE_HEIGHT;
+          let rawHeight = day.contributionCount > 0 ? (BASE_HEIGHT + ratio * MAX_HEIGHT_SCALE * 7) : BASE_HEIGHT;
 
+          const isSkyline = currentThemeModeRef.current === 'skyline';
           const activeColor = currentTheme.colorLow.clone().lerp(currentTheme.colorHigh, ratio);
           const isZero = day.contributionCount === 0;
-          const isIsometric = currentThemeModeRef.current === 'isometric';
-
-          const materialValue = isZero ? currentTheme.colorEmpty : (currentThemeModeRef.current === 'skyline' ? 0x000000 : activeColor);
-          const emissiveValue = isZero ? 0x000000 : (currentThemeModeRef.current === 'skyline' ? activeColor : 0x000000);
 
           const material = new THREE.MeshStandardMaterial({
-            color: materialValue,
-            emissive: emissiveValue,
-            emissiveIntensity: currentThemeModeRef.current === 'skyline' && !isZero ? (0.8 + ratio * 2) : 0,
-            roughness: 0.2,
-            metalness: 0.1,
+            color: isZero ? currentTheme.colorEmpty : (isSkyline ? 0x010103 : activeColor),
+            emissive: isZero ? 0x000000 : activeColor,
+            emissiveIntensity: isSkyline && !isZero ? (0.5 + ratio * 3) : 0,
+            roughness: isSkyline ? 0.05 : 0.2,
+            metalness: isSkyline ? 0.9 : 0.1,
           });
 
+          // Procedural Window Shader for Skyline
+          if (isSkyline && !isZero) {
+            material.onBeforeCompile = (shader) => {
+              shader.uniforms.uRatio = { value: ratio };
+              shader.uniforms.uTime = { value: 0 };
+              shader.fragmentShader = `
+                uniform float uRatio;
+                uniform float uTime;
+                ${shader.fragmentShader}
+              `.replace(
+                `#include <emissive_fragment>`,
+                `
+                #include <emissive_fragment>
+                float windowIntensity = step(0.85, fract(vUv.x * 4.0)) + step(0.8, fract(vUv.y * 12.0 * uRatio));
+                windowIntensity = clamp(windowIntensity, 0.0, 1.0);
+                totalEmissiveRadiance += emissive * windowIntensity * (0.8 + 0.2 * sin(uTime * 2.0));
+                `
+              );
+              material.userData.shader = shader;
+            };
+          }
+
+          const widthVar = isSkyline ? (0.85 + Math.random() * 0.3) : 1.0;
+          const depthVar = isSkyline ? (0.85 + Math.random() * 0.3) : 1.0;
+          
           const cube = new THREE.Mesh(geometry, material);
+          cube.scale.set(widthVar, 0.01, depthVar);
           cube.position.set(getPositionX(wIndex), 0, getPositionZ(dIndex));
-          cube.scale.y = 0.01; 
           cube.userData = { date: day.date, count: day.contributionCount, originalEmissive: material.emissive.clone(), targetHeight: rawHeight };
           sceneRef.current.add(cube);
           cubesRef.current.push(cube);
 
-          // Add Edges/Lines for Isometric specifically, but works for Skyline too
-          const edges = new THREE.EdgesGeometry(geometry);
-          const lineMaterial = new THREE.LineBasicMaterial({ color: currentTheme.lineColor, transparent: true, opacity: isIsometric ? 0.8 : 0.2 });
-          const line = new THREE.LineSegments(edges, lineMaterial);
-          line.position.copy(cube.position);
-          line.scale.copy(cube.scale);
-          sceneRef.current.add(line);
-          linesRef.current.push(line);
+          if (currentThemeModeRef.current === 'isometric') {
+            const edges = new THREE.EdgesGeometry(geometry);
+            const lineMaterial = new THREE.LineBasicMaterial({ color: currentTheme.lineColor, transparent: true, opacity: 0.8 });
+            const line = new THREE.LineSegments(edges, lineMaterial);
+            line.position.copy(cube.position);
+            line.scale.copy(cube.scale);
+            sceneRef.current.add(line);
+            linesRef.current.push(line);
+          }
         });
       });
 
@@ -243,11 +305,11 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     composer.addPass(renderPass);
     renderPassRef.current = renderPass;
 
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.6, 0.4, 0.85);
     composer.addPass(bloomPass);
     bloomPassRef.current = bloomPass;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
     dirLight.position.set(20, 100, 30);
@@ -259,14 +321,28 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       const dt = clockRef.current.getDelta();
+      const st = clockRef.current.getElapsedTime();
+      
       if (controlsRef.current) controlsRef.current.update();
 
       cubesRef.current.forEach((cube, i) => {
         const target = cube.userData.targetHeight || BASE_HEIGHT;
         if (Math.abs(cube.scale.y - target) > 0.01) {
           cube.scale.y += (target - cube.scale.y) * 6 * dt;
-          if (linesRef.current[i]) linesRef.current[i].scale.y = cube.scale.y;
         }
+        // Update shader time for pulsing windows
+        const mat = cube.material as THREE.MeshStandardMaterial;
+        if (mat.userData.shader) mat.userData.shader.uniforms.uTime.value = st;
+      });
+
+      // Update Spaceships
+      shipsRef.current.forEach(ship => {
+        ship.angle += ship.speed * dt;
+        const x = Math.cos(ship.angle) * ship.radius;
+        const z = Math.sin(ship.angle) * ship.radius;
+        const y = ship.height + Math.sin(st * ship.oscillationSpeed) * ship.oscillationAmplitude;
+        ship.mesh.position.set(x, y, z);
+        ship.mesh.lookAt(new THREE.Vector3(Math.cos(ship.angle + 0.1) * ship.radius, y, Math.sin(ship.angle + 0.1) * ship.radius));
       });
 
       const currentCam = cameraRef.current || orthographicCamera;
@@ -282,19 +358,13 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
           }
           hoveredCubeRef.current = object;
           (hoveredCubeRef.current.material as THREE.MeshStandardMaterial).emissive.setHex(0xffffff);
-          (hoveredCubeRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 1;
-          if (tooltipRef.current) {
-            const { date, count } = object.userData;
-            tooltipRef.current.innerHTML = `<div class="text-[10px] text-white/40 mb-1">${new Date(date).toLocaleDateString()}</div><div class="text-sm font-bold text-white">${count} days</div>`;
-            tooltipRef.current.style.opacity = '1';
-          }
+          (hoveredCubeRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = 2;
         }
       } else {
         if (hoveredCubeRef.current) {
           (hoveredCubeRef.current.material as THREE.MeshStandardMaterial).emissive.copy(hoveredCubeRef.current.userData.originalEmissive);
           (hoveredCubeRef.current.material as THREE.MeshStandardMaterial).emissiveIntensity = currentThemeModeRef.current === 'skyline' ? 1.5 : 0;
           hoveredCubeRef.current = null;
-          if (tooltipRef.current) tooltipRef.current.style.opacity = '0';
         }
       }
 
