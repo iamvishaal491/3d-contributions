@@ -26,7 +26,7 @@ export function StatsPanel({
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       transition={{ duration: 0.6, delay: 0.3 }}
-      className="bg-black border border-white/20 p-6 md:p-8 w-full lg:w-80 pointer-events-auto"
+      className="bg-black/80 backdrop-blur-md border border-white/20 p-5 md:p-6 w-full lg:w-56 pointer-events-auto"
     >
       <h2
         className="text-xl md:text-2xl font-bold text-white mb-6 tracking-tight"

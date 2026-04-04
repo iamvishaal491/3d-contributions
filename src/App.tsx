@@ -58,8 +58,8 @@ function App() {
       {/* 3D Scene Layer */}
       <ThreeVisualizer ref={visualizerRef} theme={theme} />
 
-      {/* UI Overlay Layer - Use fixed inset-0 to guarantee it covers the screen and is on top */}
-      <div className="fixed inset-0 z-50 pointer-events-none flex flex-col overflow-y-auto">
+      {/* UI Overlay Layer */}
+      <div className="fixed inset-0 z-10 pointer-events-none flex flex-col items-start p-6">
         <Header
           username={username}
           setUsername={setUsername}
@@ -67,38 +67,39 @@ function App() {
           setTheme={handleThemeChange}
           onVisualize={handleVisualize}
         />
-
-        {visualizing && (
-          <div className="w-full max-w-6xl mx-auto px-6 pb-12 flex justify-end transition-all duration-700">
-            <StatsPanel
-              total={stats.total}
-              bestStreak={stats.bestStreak}
-              highestDay={stats.highestDay}
-              average={stats.average}
-            />
-          </div>
-        )}
-
-        {!visualizing && !loading && (
-          <div className="w-full max-w-6xl mx-auto px-6 py-20 text-center">
-            <p
-              className="text-white/40 text-lg"
-              style={{ fontFamily: 'var(--font-mono)' }}
-            >
-              Enter a username and click Visualize to see the contribution graph
-            </p>
-          </div>
-        )}
-
-        {loading && (
-          <div className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50">
-            <div className="flex flex-col items-center gap-4">
-              <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
-              <p className="text-white font-mono text-sm tracking-widest uppercase">Fetching Data...</p>
-            </div>
-          </div>
-        )}
       </div>
+
+      {/* Stats Dashboard - Fixed Right */}
+      {visualizing && (
+        <div className="fixed right-6 top-1/2 -translate-y-1/2 z-20 pointer-events-none flex flex-col gap-4">
+          <StatsPanel
+            total={stats.total}
+            bestStreak={stats.bestStreak}
+            highestDay={stats.highestDay}
+            average={stats.average}
+          />
+        </div>
+      )}
+
+      {!visualizing && !loading && (
+        <div className="fixed inset-0 flex items-center justify-center z-1 pointer-events-none">
+          <p
+            className="text-white/40 text-lg max-w-md text-center"
+            style={{ fontFamily: 'var(--font-mono)' }}
+          >
+            Enter a username and click Visualize to see the contribution graph
+          </p>
+        </div>
+      )}
+
+      {loading && (
+        <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-[100] transition-all">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-12 h-12 border-4 border-white/20 border-t-white rounded-full animate-spin" />
+            <p className="text-white font-mono text-sm tracking-widest uppercase">Fetching Data...</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

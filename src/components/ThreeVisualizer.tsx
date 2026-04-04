@@ -59,9 +59,10 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
   const tooltipRef = useRef<HTMLDivElement>(null);
   
   // Three.js State Refs
-  const sceneRef = useRef<THREE.Scene | null>(null);
+  const sceneRef = useRef<THREE.Scene>(new THREE.Scene());
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const composerRef = useRef<EffectComposer | null>(null);
+  const bloomPassRef = useRef<UnrealBloomPass | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | THREE.OrthographicCamera | null>(null);
   const perspectiveCameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -69,29 +70,73 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
   const cubesRef = useRef<THREE.Mesh[]>([]);
   const gridHelperRef = useRef<THREE.GridHelper | null>(null);
   const clockRef = useRef(new THREE.Clock());
+  const currentThemeModeRef = useRef<string>(theme);
   
   // Interaction Refs
   const mouseRef = useRef(new THREE.Vector2());
   const raycasterRef = useRef(new THREE.Raycaster());
   const hoveredCubeRef = useRef<THREE.Mesh | null>(null);
 
+  const clearGrid = () => {
+    cubesRef.current.forEach(cube => {
+      cube.geometry.dispose();
+      if (Array.isArray(cube.material)) {
+        cube.material.forEach(m => m.dispose());
+      } else {
+        cube.material.dispose();
+      }
+      sceneRef.current.remove(cube);
+    });
+    cubesRef.current = [];
+  };
+
+  const updateThemeSync = (mode: string) => {
+    const t = THEMES[mode as keyof typeof THEMES] || THEMES.isometric;
+    const scene = sceneRef.current;
+    
+    currentThemeModeRef.current = mode;
+    scene.background = new THREE.Color(t.bg);
+    scene.fog = new THREE.Fog(t.bg, t.fog, t.fogFar);
+    
+    // Update Grid Helper
+    if (gridHelperRef.current) {
+      scene.remove(gridHelperRef.current);
+      gridHelperRef.current.geometry.dispose();
+      (gridHelperRef.current.material as THREE.Material).dispose();
+      gridHelperRef.current = null;
+    }
+
+    if (mode === 'isometric') {
+      cameraRef.current = orthographicCameraRef.current;
+      orthographicCameraRef.current?.position.set(50, 50, 50);
+      gridHelperRef.current = new THREE.GridHelper(100, 50, t.gridColor, t.gridColor);
+      scene.add(gridHelperRef.current);
+    } else if (mode === 'skyline') {
+      cameraRef.current = perspectiveCameraRef.current;
+      perspectiveCameraRef.current?.position.set(-60, 50, 120);
+      gridHelperRef.current = new THREE.GridHelper(150, 60, t.gridColor, t.gridColor);
+      scene.add(gridHelperRef.current);
+    } else {
+      cameraRef.current = perspectiveCameraRef.current;
+      perspectiveCameraRef.current?.position.set(0, 100, 150);
+    }
+
+    if (controlsRef.current && cameraRef.current) {
+      controlsRef.current.object = cameraRef.current;
+      controlsRef.current.update();
+    }
+    
+    if (bloomPassRef.current) {
+      bloomPassRef.current.enabled = t.useBloom;
+    }
+  };
+
   useImperativeHandle(ref, () => ({
     buildGrid(data: any) {
       if (!data || !data.weeks || !sceneRef.current) return;
-      
-      // Clear existing grid
-      cubesRef.current.forEach(cube => {
-        cube.geometry.dispose();
-        if (Array.isArray(cube.material)) {
-          cube.material.forEach(m => m.dispose());
-        } else {
-          cube.material.dispose();
-        }
-        sceneRef.current?.remove(cube);
-      });
-      cubesRef.current = [];
+      clearGrid();
 
-      const currentTheme = THEMES[theme as keyof typeof THEMES] || THEMES.isometric;
+      const currentTheme = THEMES[currentThemeModeRef.current as keyof typeof THEMES] || THEMES.isometric;
       const weeks = data.weeks;
       const numWeeks = weeks.length;
       const numDays = 7;
@@ -105,21 +150,15 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
 
       const getPositionX = (w: number) => (w - numWeeks / 2) * (CUBE_SIZE + GAP);
       const getPositionZ = (d: number) => (d - numDays / 2) * (CUBE_SIZE + GAP);
-
       const geometry = new THREE.BoxGeometry(CUBE_SIZE, 1, CUBE_SIZE);
       geometry.translate(0, 0.5, 0);
 
       weeks.forEach((week: any, wIndex: number) => {
         week.contributionDays?.forEach((day: any, dIndex: number) => {
-          let rawHeight = BASE_HEIGHT;
-          let ratio = 0;
-          
-          if (day.contributionCount > 0) {
-            ratio = Math.log(day.contributionCount + 1) / Math.log(maxCount + 1);
-            rawHeight = BASE_HEIGHT + (ratio * MAX_HEIGHT_SCALE * 4);
-          }
+          let ratio = day.contributionCount > 0 ? (Math.log(day.contributionCount + 1) / Math.log(maxCount + 1)) : 0;
+          let rawHeight = day.contributionCount > 0 ? (BASE_HEIGHT + ratio * MAX_HEIGHT_SCALE * 4) : BASE_HEIGHT;
 
-          const isNeon = theme === 'skyline';
+          const isNeon = currentThemeModeRef.current === 'skyline';
           const activeColor = currentTheme.colorLow.clone().lerp(currentTheme.colorHigh, ratio);
           const isZero = day.contributionCount === 0;
 
@@ -127,178 +166,85 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
             color: isZero ? currentTheme.colorEmpty : (isNeon ? 0x000000 : activeColor),
             emissive: isZero ? 0x000000 : (isNeon ? activeColor : 0x000000),
             emissiveIntensity: isNeon && !isZero ? (0.8 + ratio * 1.5) : 0,
-            roughness: isNeon ? 0.1 : 0.3,
-            metalness: isNeon ? 0.8 : 0.1,
           });
 
           const cube = new THREE.Mesh(geometry, material);
           cube.position.set(getPositionX(wIndex), 0, getPositionZ(dIndex));
           cube.scale.y = 0.01; 
-          cube.castShadow = true;
-          cube.receiveShadow = true;
-
-          cube.userData = {
-            date: day.date,
-            count: day.contributionCount,
-            originalEmissive: material.emissive.clone(),
-            targetHeight: rawHeight
-          };
-
-          const edges = new THREE.EdgesGeometry(geometry);
-          const line = new THREE.LineSegments(edges, new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.2 }));
-          cube.add(line);
-
-          sceneRef.current?.add(cube);
+          cube.userData = { date: day.date, count: day.contributionCount, originalEmissive: material.emissive.clone(), targetHeight: rawHeight };
+          sceneRef.current.add(cube);
           cubesRef.current.push(cube);
         });
       });
 
-      // Camera Animations
-      const gridWidth = numWeeks * (CUBE_SIZE + GAP);
-      if (theme === 'isometric') {
-        if (cameraRef.current instanceof THREE.OrthographicCamera) {
-          cameraRef.current.zoom = 1;
-          cameraRef.current.updateProjectionMatrix();
-          gsap.to(cameraRef.current, { zoom: 4.5, duration: 1.5, ease: "power3.out", onUpdate: () => (cameraRef.current as THREE.OrthographicCamera).updateProjectionMatrix() });
+      // Camera intro animation
+      if (cameraRef.current) {
+        controlsRef.current?.target.set(0, 0, 0);
+        if (currentThemeModeRef.current === 'isometric') {
+          const cam = cameraRef.current as THREE.OrthographicCamera;
+          cam.zoom = 1;
+          cam.updateProjectionMatrix();
+          gsap.to(cam, { zoom: 4.5, duration: 1.5, ease: "power3.out", onUpdate: () => cam.updateProjectionMatrix() });
         }
-        controlsRef.current?.target.set(0, 0, 0);
-      } else if (theme === 'skyline') {
-        gsap.to(cameraRef.current!.position, {
-          x: gridWidth * -0.5,
-          y: 20,
-          z: 70,
-          duration: 2.0,
-          ease: "power3.out"
-        });
-        controlsRef.current?.target.set(0, 0, 0);
-      } else {
-        gsap.to(cameraRef.current!.position, {
-          x: 0,
-          y: gridWidth * 0.35,
-          z: gridWidth * 0.6,
-          duration: 1.5,
-          ease: "power3.out"
-        });
-        controlsRef.current?.target.set(0, 0, 0);
       }
     },
     async setTheme(mode: string) {
-      if (!sceneRef.current) return;
-      const t = THEMES[mode as keyof typeof THEMES] || THEMES.isometric;
-      
-      if (gridHelperRef.current) {
-        sceneRef.current.remove(gridHelperRef.current);
-        gridHelperRef.current.geometry.dispose();
-        (gridHelperRef.current.material as THREE.Material).dispose();
-        gridHelperRef.current = null;
-      }
-
-      sceneRef.current.background = new THREE.Color(t.bg);
-      sceneRef.current.fog = new THREE.Fog(t.bg, t.fog, t.fogFar);
-
-      if (mode === 'isometric') {
-        cameraRef.current = orthographicCameraRef.current;
-        cameraRef.current?.position.set(50, 50, 50);
-        if (controlsRef.current) {
-          controlsRef.current.object = cameraRef.current!;
-          controlsRef.current.enableRotate = true;
-        }
-        gridHelperRef.current = new THREE.GridHelper(100, 50, t.gridColor, t.gridColor);
-        sceneRef.current.add(gridHelperRef.current);
-      } else if (mode === 'skyline') {
-        cameraRef.current = perspectiveCameraRef.current;
-        cameraRef.current?.position.set(-60, 50, 120);
-        if (controlsRef.current) {
-          controlsRef.current.object = cameraRef.current!;
-          controlsRef.current.enableRotate = true;
-          controlsRef.current.maxPolarAngle = Math.PI / 2 - 0.05;
-        }
-        gridHelperRef.current = new THREE.GridHelper(150, 60, t.gridColor, t.gridColor);
-        sceneRef.current.add(gridHelperRef.current);
-      } else {
-        cameraRef.current = perspectiveCameraRef.current;
-        cameraRef.current?.position.set(0, 100, 150);
-        if (controlsRef.current) {
-          controlsRef.current.object = cameraRef.current!;
-          controlsRef.current.enableRotate = true;
-          controlsRef.current.maxPolarAngle = Math.PI / 2 - 0.05;
-        }
-      }
+      updateThemeSync(mode);
     }
   }));
 
+  // Initial Setup useEffect - Runs ONLY ONCE
   useEffect(() => {
     if (!containerRef.current) return;
 
-    // Initialization
-    const scene = new THREE.Scene();
-    sceneRef.current = scene;
-
+    const scene = sceneRef.current;
     const aspect = window.innerWidth / window.innerHeight;
     const perspectiveCamera = new THREE.PerspectiveCamera(45, aspect, 0.1, 1000);
     const orthographicCamera = new THREE.OrthographicCamera(-20 * aspect, 20 * aspect, 20, -20, -100, 1000);
     perspectiveCameraRef.current = perspectiveCamera;
     orthographicCameraRef.current = orthographicCamera;
-    
-    const initialCam = theme === 'isometric' ? orthographicCamera : perspectiveCamera;
-    cameraRef.current = initialCam;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     containerRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    const controls = new OrbitControls(initialCam, renderer.domElement);
+    const controls = new OrbitControls(orthographicCamera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controlsRef.current = controls;
 
     const composer = new EffectComposer(renderer);
-    const renderPass = new RenderPass(scene, initialCam);
+    const renderPass = new RenderPass(scene, orthographicCamera);
     composer.addPass(renderPass);
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85);
-    bloomPass.strength = 1.2;
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.2, 0.4, 0.85);
     composer.addPass(bloomPass);
-    composerRef.current = composer;
-
-    const t = THEMES[theme as keyof typeof THEMES] || THEMES.isometric;
-    scene.background = new THREE.Color(t.bg);
-    scene.fog = new THREE.Fog(t.bg, t.fog, t.fogFar);
-    
-    if (theme === 'isometric') {
-      orthographicCamera.position.set(50, 50, 50);
-      gridHelperRef.current = new THREE.GridHelper(100, 50, t.gridColor, t.gridColor);
-      scene.add(gridHelperRef.current);
-    }
+    bloomPassRef.current = bloomPass;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 1);
     dirLight.position.set(50, 100, 50);
-    dirLight.castShadow = true;
     scene.add(dirLight);
+
+    // Initial theme update without state dependency crash
+    updateThemeSync(theme);
 
     let animationId: number;
     const animate = () => {
       animationId = requestAnimationFrame(animate);
       const dt = clockRef.current.getDelta();
-      
       if (controlsRef.current) controlsRef.current.update();
+      if (composerRef.current) composerRef.current.render();
 
-      if (cubesRef.current.length > 0) {
-        for (let i = 0; i < cubesRef.current.length; i++) {
-          const cube = cubesRef.current[i];
-          const target = cube.userData.targetHeight || BASE_HEIGHT;
-          if (cube.scale.y < target) {
-            cube.scale.y += (target - cube.scale.y) * 8 * dt;
-          }
-        }
-      }
+      cubesRef.current.forEach(cube => {
+        const target = cube.userData.targetHeight || BASE_HEIGHT;
+        if (cube.scale.y < target) cube.scale.y += (target - cube.scale.y) * 8 * dt;
+      });
 
-      if (cameraRef.current && cubesRef.current.length > 0) {
+      if (cameraRef.current) {
         raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current);
         const intersects = raycasterRef.current.intersectObjects(cubesRef.current);
         if (intersects.length > 0) {
@@ -322,24 +268,20 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
         }
       }
 
-      if (THEMES[theme as keyof typeof THEMES]?.useBloom) composerRef.current?.render();
-      else rendererRef.current?.render(scene, cameraRef.current!);
+      if (bloomPass.enabled) composer.render();
+      else renderer.render(scene, cameraRef.current || orthographicCamera);
     };
 
     const handleResize = () => {
-      const aspect = window.innerWidth / window.innerHeight;
-      if (perspectiveCameraRef.current) {
-        perspectiveCameraRef.current.aspect = aspect;
-        perspectiveCameraRef.current.updateProjectionMatrix();
-      }
-      if (orthographicCameraRef.current) {
-        const f = 40;
-        orthographicCameraRef.current.left = -f * aspect / 2;
-        orthographicCameraRef.current.right = f * aspect / 2;
-        orthographicCameraRef.current.updateProjectionMatrix();
-      }
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      composer.setSize(window.innerWidth, window.innerHeight);
+      const w = window.innerWidth, h = window.innerHeight, aspect = w / h;
+      perspectiveCamera.aspect = aspect;
+      perspectiveCamera.updateProjectionMatrix();
+      const f = 40;
+      orthographicCamera.left = -f * aspect / 2;
+      orthographicCamera.right = f * aspect / 2;
+      orthographicCamera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
     };
 
     const handleMouseMove = (e: MouseEvent) => {
@@ -362,11 +304,11 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
       renderer.dispose();
       if (containerRef.current && renderer.domElement.parentNode) containerRef.current.removeChild(renderer.domElement);
     };
-  }, [theme]);
+  }, []); // Empty dependency array ensures stability
 
   return (
     <>
-      <div id="canvas-container" ref={containerRef} />
+      <div id="canvas-container" ref={containerRef} style={{ position: 'fixed', inset: 0, zIndex: 0, pointerEvents: 'auto' }} />
       <div ref={tooltipRef} className="fixed pointer-events-none bg-black border border-white/20 p-3 z-[100] opacity-0 transition-opacity duration-200 min-w-[120px]" style={{ fontFamily: 'var(--font-mono)' }} />
     </>
   );
