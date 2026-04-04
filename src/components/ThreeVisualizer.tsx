@@ -694,6 +694,35 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
         alphaAttr.needsUpdate = true;
       });
 
+      // ── Raycaster: hover tooltip ─────────────────────────
+      if (cubesRef.current.length > 0) {
+        const cam = cameraRef.current || orthoCam;
+        raycasterRef.current.setFromCamera(mouseRef.current, cam);
+        const hits = raycasterRef.current.intersectObjects(cubesRef.current, false);
+        const tooltip = tooltipRef.current;
+        if (hits.length > 0) {
+          const hit = hits[0].object as THREE.Mesh;
+          if (hit !== hoveredRef.current) {
+            hoveredRef.current = hit;
+          }
+          if (tooltip && hit.userData.date !== undefined) {
+            const date = hit.userData.date || 'Unknown';
+            const count = hit.userData.count ?? 0;
+            const color = count === 0 ? '#666' : count < 3 ? '#9be9a8' : count < 8 ? '#40c463' : count < 15 ? '#30a14e' : '#216e39';
+            tooltip.innerHTML = `
+              <div style="font-size:10px;color:#888;margin-bottom:4px;letter-spacing:1px">DATE</div>
+              <div style="font-size:13px;color:#fff;font-weight:600;margin-bottom:8px">${date}</div>
+              <div style="font-size:10px;color:#888;margin-bottom:4px;letter-spacing:1px">COMMITS</div>
+              <div style="font-size:18px;font-weight:700;color:${color}">${count}</div>
+            `;
+            tooltip.style.opacity = '1';
+          }
+        } else {
+          hoveredRef.current = null;
+          if (tooltip) tooltip.style.opacity = '0';
+        }
+      }
+
       const cam = cameraRef.current || orthoCam;
       if (bloom.enabled) composer.render();
       else renderer.render(scene, cam);
@@ -706,8 +735,14 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
       renderer.setSize(w, h); composer.setSize(w, h);
     };
     const onMove = (e: MouseEvent) => {
-      mouseRef.current.set((e.clientX / window.innerWidth) * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
-      if (tooltipRef.current) { tooltipRef.current.style.left = `${e.clientX + 15}px`; tooltipRef.current.style.top = `${e.clientY + 15}px`; }
+      mouseRef.current.set(
+        (e.clientX / window.innerWidth)  * 2 - 1,
+        -(e.clientY / window.innerHeight) * 2 + 1
+      );
+      if (tooltipRef.current) {
+        tooltipRef.current.style.left = `${e.clientX + 18}px`;
+        tooltipRef.current.style.top  = `${e.clientY + 18}px`;
+      }
     };
     window.addEventListener('resize', onResize);
     window.addEventListener('mousemove', onMove);
