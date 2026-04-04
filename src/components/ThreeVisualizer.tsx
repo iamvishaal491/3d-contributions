@@ -450,15 +450,13 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
     }
   };
 
-  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  //  TRON GRID BIKES \u2014 glowing heads travelling along grid lines
-  // \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  const TRON_STEP        = 5;    // world units per grid cell (matches GridHelper 500/100)
-  const TRON_TRAIL_LEN   = 90;   // how many past positions to keep
-  const TRON_X_MIN       = -10;  // grid cell bounds in X
-  const TRON_X_MAX       =  10;
-  const TRON_Z_MIN       = -5;   // grid cell bounds in Z
-  const TRON_Z_MAX       =  5;
+  // ── TRON GRID BIKES — glowing heads travelling along grid lines ────────────
+  const TRON_STEP        = CUBE_SIZE + GAP;
+  const TRON_TRAIL_LEN   = 120;
+  const TRON_X_MIN       = -26;
+  const TRON_X_MAX       =  25;
+  const TRON_Z_MIN       = -3;
+  const TRON_Z_MAX       =  3;
 
   const makeTronTrail = (color: number): THREE.Line => {
     const positions = new Float32Array(TRON_TRAIL_LEN * 3);
@@ -492,14 +490,20 @@ export const ThreeVisualizer = forwardRef<ThreeVisualizerRef, ThreeVisualizerPro
 
   const createTronBikes = () => {
     if (themeRef.current !== 'skyline') return;
-    const colors = [0x00ffff, 0xff0088, 0xffaa00];
-    const lightIntensity = [12, 10, 10];
-    const startDirs: [number, number][] = [[1, 0], [0, 1], [-1, 0]];
+    const colors = [
+      0x00ffff,  // cyan
+      0xff0099,  // hot magenta
+      0xaaff00,  // lime green
+      0xff6600,  // neon orange
+      0xcc00ff,  // electric violet
+      0xffff00,  // yellow
+    ];
+    const startDirs: [number, number][] = [[1,0],[0,1],[-1,0],[0,-1],[1,0],[-1,0]];
 
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 6; i++) {
       const color = colors[i];
       // Head = PointLight only (no mesh — light IS the bike)
-      const light = new THREE.PointLight(color, lightIntensity[i], 18);
+      const light = new THREE.PointLight(color, 20, 30);
       light.position.set(
         (Math.floor(Math.random() * (TRON_X_MAX - TRON_X_MIN)) + TRON_X_MIN) * TRON_STEP,
         0.3,
